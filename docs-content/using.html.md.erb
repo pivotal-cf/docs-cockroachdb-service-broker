@@ -1,15 +1,116 @@
 ---
-title: Using YOUR-PRODUCT-NAME
+title: Using CockroachDB Service Broker for PCF
 owner: Partners
 ---
 
-This topic describes how to use YOUR-PRODUCT-NAME.
+This topic describes how to use CockroachDB Service Broker for PCF.
 
-##<a id='using'></a> Using YOUR-PRODUCT-NAME
+##<a id='using'></a> Using CockroachDB Service Broker for PCF
 
-**This topic should include any instructions for how to use the service or dashboard created by the tile. 
-Give procedures for how to perform the different functions offered by your product and provide screenshots where necessary.** 
+## Introduction
 
-**You can also use this section to include information about Architecture and Troubleshooting for known errors. 
-If you include a Troubleshooting section, follow the Symptom/Explanation format used in the 
-[Okta Troubleshooting](http://docs.pivotal.io/p-identity/okta/troubleshooting.html) topic**.
+The CRDB service broker allows binding applications to CockroachDB instances,
+providing "Level 2" integration (see [pivotal
+docs](https://docs.pivotal.io/tiledev/brokered.html)).
+
+A service broker is configured to expose one or more *service plans*. Each
+service plan is associated to a CockroachDB cluster or instance.
+
+From service plans we can instantiate *service instances*. For each service
+instance, a database (namespace) is created on a CockroachDB instance.
+
+Once we have a service set up, we can *bind* it to applications. Each binding
+creates a unique user/password for that application and grants permissions on
+the service database. The credentials are passed via a `postgres://` URI;
+applications which support Postgres may work without modifications (assuming
+they don't use postgres-specific syntax that CockroachDB doesn't support).
+
+Note that when we want different apps to be separated (different namespaces),
+they should use different service instances.
+
+## How to use
+
+### Prerequisites
+
+- Install the [CF CLI](https://docs.cloudfoundry.org/cf-cli/install-go-cli.html).
+- [Login](https://docs.cloudfoundry.org/cf-cli/getting-started.html#login) to a CF instance.
+- Set up one or more CockroachDB instances. These don't need to live on CF.
+  Note: for things to work with the sample `spring-music` app, a recent version
+  of CockroachDB which supports
+  [int4](https://github.com/cockroachdb/cockroach/pull/16720) must be used.
+
+
+### Installing the service broker
+
+The service broker is available as a CF tile. You can build the tile using the
+[Tile Generator](https://docs.pivotal.io/tiledev/tile-generator.html) by running
+`build.sh`; then upload the `product/*.pivotal` file to CF (using the ops
+manager). Then you can install the tile; there is a configuration form for
+specifying details for the service plans.
+
+Note that every build bumps the tile version. CF will barf if it sees two files
+with the same version that are different (even if the old one was uninstalled),
+so it's best to not circumvent the version change.
+
+After the installation, the `cf service-brokers` command should show `cockroachdb-service-broker`.
+
+### Using the CockroachDB service
+
+Make sure access to the service is enabled via `cf service-access`. To enable,
+use `cf enable-service-access cockroachdb`. Then `cf marketplace` should list
+the `cockroachdb` service with whatever plans the broker was pre-configured.
+
+#### Create a service instance
+
+Create a service for a specific plan:
+```
+cf create-service cockroachdb default crdb-service-1
+```
+
+If we log into the database, we can see that a new database has been created.
+
+```
+root@52.170.84.221:26257/> SHOW DATABASES;
++-------------------------------------+
+|              Database               |
++-------------------------------------+
+| cf_gbccnddiddnnhfdolliklaolojgmceif |
+| crdb_internal                       |
+| information_schema                  |
+| lol                                 |
+| pg_catalog                          |
+| system                              |
++-------------------------------------+
+(6 rows)
+```
+
+#### Bind service instance to app
+
+We can test things with a sample app called `spring-music`, which just exposes a
+web UI to insert/remove music album information. The application supports a
+postgres backend. To install it, see the [`spring-music-only-war` repo](https://github.com/svennela/spring-music-only-war).
+
+Note: we can only use CockroachDB in insecure mode with this app (it tries to
+connect without TLS, regardless of the URI).
+
+Once `spring-music` is pushed, we can bind it to our new service:
+```
+cf bind-service spring-music crdb-service-1
+```
+
+This operation created a new user with access to the database associated with
+`crdb-service-1`:
+
+![show users and grants](https://s3.us-east-2.amazonaws.com/docs-cockroachdb-service-broker/images/Show_Users_And_Grants.png)
+
+We can take a look at the environment for spring-music, and notice it includes a
+URI to our database:
+```
+cf env spring-music
+...
+![soring_music](https://s3.us-east-2.amazonaws.com/docs-cockroachdb-service-broker/images/spring_music.png)
+...
+```
+Restart the app (`cf restart spring-music`) and it should now be using our database:
+```
+![restart_app](https://s3.us-east-2.amazonaws.com/docs-cockroachdb-service-broker/images/restart_app.png)
