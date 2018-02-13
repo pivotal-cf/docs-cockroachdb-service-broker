@@ -100,16 +100,14 @@ This operation creates a new user with access to the database associated with `c
 
 ![show users and grants](https://s3.us-east-2.amazonaws.com/docs-cockroachdb-service-broker/images/Show_Users_And_Grants.png)
 
-You can take a look at the environment for spring-music, which includes a URI to the database:
+You can take a look at the environment for spring-music, which includes a URL to the database:
                  
 ```
 cf env spring-music
-...
-![soring_music](https://s3.us-east-2.amazonaws.com/docs-cockroachdb-service-broker/images/spring_music.png)
-...
 ```
+![spring_music](https://s3.us-east-2.amazonaws.com/docs-cockroachdb-service-broker/images/spring_music.png)
+
                  
 Restart `cf restart spring-music`. It should now be using your database:
 
-```
 ![restart_app](https://s3.us-east-2.amazonaws.com/docs-cockroachdb-service-broker/images/restart_app.png)
